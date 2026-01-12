@@ -467,14 +467,41 @@ class IPScannerApp(ctk.CTk):
         )
         results_title.pack(side="left")
         
+        # Buttons frame
+        btn_frame = ctk.CTkFrame(header_frame, fg_color="transparent")
+        btn_frame.pack(side="right")
+        
+        copy_ips_btn = ctk.CTkButton(
+            btn_frame, text="📄 Copy IPs",
+            width=100, height=35,
+            fg_color=self.colors['accent_cyan'],
+            hover_color="#00c8d4",
+            text_color=self.colors['bg_dark'],
+            font=ctk.CTkFont(size=12, weight="bold"),
+            command=self.copy_filtered_ips
+        )
+        copy_ips_btn.pack(side="left", padx=(0, 8))
+        
+        copy_btn = ctk.CTkButton(
+            btn_frame, text="📋 Copy All",
+            width=100, height=35,
+            fg_color=self.colors['accent_green'],
+            hover_color="#00cc6a",
+            text_color=self.colors['bg_dark'],
+            font=ctk.CTkFont(size=12, weight="bold"),
+            command=self.copy_filtered_results
+        )
+        copy_btn.pack(side="left", padx=(0, 8))
+        
         export_btn = ctk.CTkButton(
-            header_frame, text="📥 Export CSV",
-            width=120, height=35,
+            btn_frame, text="📥 Export",
+            width=100, height=35,
             fg_color=self.colors['accent_purple'],
             hover_color="#9333ea",
+            font=ctk.CTkFont(size=12, weight="bold"),
             command=self.export_results
         )
-        export_btn.pack(side="right")
+        export_btn.pack(side="left")
         
         # Filter section
         filter_frame = ctk.CTkFrame(self.right_frame, fg_color=self.colors['bg_input'], corner_radius=10)
@@ -1587,60 +1614,110 @@ class IPScannerApp(ctk.CTk):
             messagebox.showwarning("Warning", "No results to export")
             return
         
+        # Let user choose save location
         file_path = filedialog.asksaveasfilename(
-            title="Save Results",
+            title="Save Results As",
             defaultextension=".csv",
-            filetypes=[("CSV files", "*.csv")],
-            initialfilename=f"ip_scan_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
+            initialfilename=f"ip_scan_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+            initialdir=os.path.expanduser("~\\Desktop") if os.name == 'nt' else os.path.expanduser("~/Desktop")
         )
         
-        if file_path:
-            try:
-                with open(file_path, "w", newline="", encoding="utf-8-sig") as f:
-                    writer = csv.writer(f)
-                    writer.writerow(["IP", "VT_Malicious", "VT_Suspicious", "VT_Score", "Abuse_Score", "Country", "Status"])
-                    
-                    for r in self.scan_results:
-                        if r["status"] == "private":
-                            writer.writerow([
-                                r["ip"],
-                                "Private IP",
-                                "Private IP",
-                                "Private IP",
-                                "Private IP",
-                                "Private",
-                                "private"
-                            ])
-                        else:
-                            vt = r.get("vt_result") or {}
-                            abuse = r.get("abuse_result") or {}
-                            
-                            writer.writerow([
-                                r["ip"],
-                                vt.get("malicious", "N/A") if vt.get("success") else "N/A",
-                                vt.get("suspicious", "N/A") if vt.get("success") else "N/A",
-                                vt.get("score", "N/A") if vt.get("success") else "N/A",
-                                f"{abuse.get('score', 'N/A')}%" if abuse.get("success") else "N/A",
-                                r["country"],
-                                r["status"]
-                            ])
+        if not file_path:  # User cancelled
+            return
+        
+        try:
+            with open(file_path, "w", newline="", encoding="utf-8-sig") as f:
+                writer = csv.writer(f)
+                writer.writerow(["IP", "VT_Malicious", "VT_Suspicious", "VT_Score", "Abuse_Score", "Country", "Status"])
                 
-                # Ask to open folder
-                result = messagebox.askyesno(
-                    "✅ Export Complete", 
-                    f"Results saved to:\n{file_path}\n\nDo you want to open the folder?"
-                )
-                
-                if result:
-                    # Open folder and select file
-                    folder_path = os.path.dirname(file_path)
-                    if os.name == 'nt':  # Windows
-                        os.system(f'explorer /select,"{file_path}"')
-                    elif os.name == 'posix':  # Linux/Mac
-                        os.system(f'xdg-open "{folder_path}"')
+                for r in self.scan_results:
+                    if r["status"] == "private":
+                        writer.writerow([
+                            r["ip"],
+                            "Private IP",
+                            "Private IP",
+                            "Private IP",
+                            "Private IP",
+                            "Private",
+                            "private"
+                        ])
+                    else:
+                        vt = r.get("vt_result") or {}
+                        abuse = r.get("abuse_result") or {}
                         
-            except Exception as e:
-                messagebox.showerror("Error", f"Failed to save:\n{e}")
+                        writer.writerow([
+                            r["ip"],
+                            vt.get("malicious", "N/A") if vt.get("success") else "N/A",
+                            vt.get("suspicious", "N/A") if vt.get("success") else "N/A",
+                            vt.get("score", "N/A") if vt.get("success") else "N/A",
+                            f"{abuse.get('score', 'N/A')}%" if abuse.get("success") else "N/A",
+                            r["country"],
+                            r["status"]
+                        ])
+            
+            # Ask to open folder
+            result = messagebox.askyesno(
+                "✅ Export Complete", 
+                f"Results saved to:\n{file_path}\n\nDo you want to open the folder?"
+            )
+            
+            if result:
+                folder_path = os.path.dirname(file_path)
+                if os.name == 'nt':  # Windows
+                    os.startfile(folder_path)
+                elif os.name == 'posix':  # Linux/Mac
+                    import subprocess
+                    subprocess.run(['xdg-open', folder_path])
+                    
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to save:\n{e}")
+    
+    def copy_filtered_results(self):
+        """Copy currently filtered/visible results to clipboard"""
+        items = self.tree.get_children()
+        
+        if not items:
+            messagebox.showwarning("Warning", "No results to copy")
+            return
+        
+        # Build text from visible results
+        lines = []
+        lines.append("IP\tVirusTotal\tAbuseIPDB\tCountry\tStatus")
+        lines.append("-" * 60)
+        
+        for item in items:
+            values = self.tree.item(item)["values"]
+            line = f"{values[0]}\t{values[1]}\t{values[2]}\t{values[3]}\t{values[4]}"
+            lines.append(line)
+        
+        # Copy to clipboard
+        text = "\n".join(lines)
+        self.clipboard_clear()
+        self.clipboard_append(text)
+        
+        messagebox.showinfo("✅ Copied", f"Copied {len(items)} results to clipboard!")
+    
+    def copy_filtered_ips(self):
+        """Copy only IP addresses from filtered results to clipboard"""
+        items = self.tree.get_children()
+        
+        if not items:
+            messagebox.showwarning("Warning", "No IPs to copy")
+            return
+        
+        # Get only IP addresses
+        ips = []
+        for item in items:
+            values = self.tree.item(item)["values"]
+            ips.append(str(values[0]))
+        
+        # Copy to clipboard (one IP per line)
+        text = "\n".join(ips)
+        self.clipboard_clear()
+        self.clipboard_append(text)
+        
+        messagebox.showinfo("✅ Copied", f"Copied {len(ips)} IP addresses to clipboard!")
 
 
 def main():
